@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: erp_user
+      POSTGRES_PASSWORD: erp_password
+      POSTGRES_DB: garment_erp
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U erp_user -d garment_erp"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://erp_user:erp_password@db:5432/garment_erp?schema=public
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - NODE_ENV=production
+      - JWT_SECRET=super_secret_pilot_key_change_me
+      - SENTRY_DSN=${SENTRY_DSN:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db-backup:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: erp_user
+      POSTGRES_PASSWORD: erp_password
+      POSTGRES_DB: garment_erp
+      POSTGRES_HOST: db
+      S3_BUCKET: ${BACKUP_S3_BUCKET:-erp-backups}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-auto}
+      S3_ENDPOINT: ${S3_ENDPOINT:-} # Useful for Cloudflare R2
+    volumes:
+      - pgbackups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: |
+      sh -c '
+      apk add --no-cache aws-cli
+      echo "0 2 * * * pg_dump -h $$POSTGRES_HOST -U $$POSTGRES_USER -F c $$POSTGRES_DB > /backups/db_backup_\$$(date +\%Y\%m\%d).dump && aws s3 cp /backups/db_backup_\$$(date +\%Y\%m\%d).dump s3://$$S3_BUCKET/ --endpoint-url=$$S3_ENDPOINT" > /etc/crontabs/root
+      crond -f -l 2
+      '
+
+volumes:
+  pgdata:
+  pgbackups:
+  redisdata:
