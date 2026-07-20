@@ -1,38 +1,35 @@
 FROM node:20-alpine AS builder
 
 WORKDIR /app
-
-# Copy package and lock files
-COPY package*.json ./
-COPY pnpm-lock.yaml ./
-
-# Install dependencies using pnpm
 RUN npm install -g pnpm
-RUN pnpm install --frozen-lockfile
 
-# Copy source code and prisma schema
+# Copy everything from the root of the monorepo
 COPY . .
 
-# Generate prisma client
-RUN pnpm prisma generate
+# Install all dependencies across the monorepo
+RUN pnpm install --frozen-lockfile
 
-# Build the NestJS application
-RUN pnpm build
+# Generate prisma client specifically for the backend
+RUN cd apps/backend && pnpm prisma generate
+
+# Build the backend application
+RUN pnpm --filter backend build
 
 # --- Production Image ---
 FROM node:20-alpine
 
 WORKDIR /app
+RUN npm install -g pnpm
 
-# Copy necessary files from builder
+# Copy workspace setup and built backend
 COPY --from=builder /app/package.json ./
+COPY --from=builder /app/pnpm-workspace.yaml ./
 COPY --from=builder /app/pnpm-lock.yaml ./
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/packages ./packages
+COPY --from=builder /app/apps/backend ./apps/backend
 
-# Expose API port
 EXPOSE 3000
 
-# Run migrations and start server
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
+# Start server
+CMD ["sh", "-c", "cd apps/backend && npx prisma db push --accept-data-loss && node dist/src/main.js"]
