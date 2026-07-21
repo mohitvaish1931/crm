@@ -6,7 +6,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y openssl procps && rm -rf /var/lib/apt/lists/*
 
 # Copy package.json
-COPY package*.json ./
+COPY package.json ./
 
 # Bypass husky
 ENV CI=true
