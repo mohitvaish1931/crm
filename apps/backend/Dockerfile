@@ -16,14 +16,14 @@ ENV NODE_ENV=development
 # Copy all source files
 COPY . .
 
-# Install dependencies using npm to avoid pnpm v9 approve-builds restriction
-RUN npm install
+# Install dependencies using yarn to avoid npm bug and pnpm v9 approve-builds restriction
+RUN corepack enable && yarn install
 
 # Generate prisma client
 RUN npx prisma generate
 
 # Build the NestJS application
-RUN npm run build
+RUN yarn build
 
 # --- Production Image ---
 FROM node:22-bookworm-slim
