@@ -1,10 +1,14 @@
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 RUN npm install -g pnpm
 
 # Copy everything from the root of the monorepo
 COPY . .
+
+# Bypass husky prepare scripts during Docker build
+ENV CI=true
+ENV HUSKY=0
 
 # Install all dependencies across the monorepo
 RUN pnpm install --frozen-lockfile
@@ -16,7 +20,7 @@ RUN cd apps/backend && pnpm prisma generate
 RUN pnpm --filter backend build
 
 # --- Production Image ---
-FROM node:20-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 RUN npm install -g pnpm
