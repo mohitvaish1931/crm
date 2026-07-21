@@ -1,8 +1,9 @@
-FROM node:22-alpine AS builder
+FROM node:22-bookworm-slim AS builder
 
 WORKDIR /app
 
-# Install pnpm
+# Install pnpm and necessary build tools
+RUN apt-get update && apt-get install -y openssl procps && rm -rf /var/lib/apt/lists/*
 RUN npm install -g pnpm
 
 # Copy package.json (no lockfile needed, we will generate it)
@@ -25,9 +26,10 @@ RUN pnpm prisma generate
 RUN pnpm build
 
 # --- Production Image ---
-FROM node:22-alpine
+FROM node:22-bookworm-slim
 
 WORKDIR /app
+RUN apt-get update && apt-get install -y openssl procps && rm -rf /var/lib/apt/lists/*
 RUN npm install -g pnpm
 
 # Copy necessary files from builder
