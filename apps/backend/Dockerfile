@@ -19,7 +19,8 @@ COPY . .
 # Install dependencies using yarn to avoid npm bug and pnpm v9 approve-builds restriction
 RUN corepack enable && yarn install
 
-# Generate prisma client
+# Generate prisma client with dummy URL to bypass Prisma 7 strict config parsing during build
+ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 RUN npx prisma generate
 
 # Build the NestJS application
