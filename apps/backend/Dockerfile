@@ -1,23 +1,28 @@
 FROM node:22-alpine AS builder
 
 WORKDIR /app
+
+# Install pnpm
 RUN npm install -g pnpm
 
-# Copy everything from the root of the monorepo
-COPY . .
+# Copy package.json (no lockfile needed, we will generate it)
+COPY package*.json ./
 
-# Bypass husky prepare scripts during Docker build
+# Bypass husky
 ENV CI=true
 ENV HUSKY=0
 
-# Install all dependencies across the monorepo
-RUN pnpm install --frozen-lockfile
+# Copy all source files
+COPY . .
 
-# Generate prisma client specifically for the backend
-RUN cd apps/backend && pnpm prisma generate
+# Install dependencies and generate lockfile on the fly
+RUN pnpm install --no-frozen-lockfile
 
-# Build the backend application
-RUN pnpm --filter backend build
+# Generate prisma client
+RUN pnpm prisma generate
+
+# Build the NestJS application
+RUN pnpm build
 
 # --- Production Image ---
 FROM node:22-alpine
@@ -25,15 +30,13 @@ FROM node:22-alpine
 WORKDIR /app
 RUN npm install -g pnpm
 
-# Copy workspace setup and built backend
+# Copy necessary files from builder
 COPY --from=builder /app/package.json ./
-COPY --from=builder /app/pnpm-workspace.yaml ./
-COPY --from=builder /app/pnpm-lock.yaml ./
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/packages ./packages
-COPY --from=builder /app/apps/backend ./apps/backend
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/prisma ./prisma
 
 EXPOSE 3000
 
 # Start server
-CMD ["sh", "-c", "cd apps/backend && npx prisma db push --accept-data-loss && node dist/src/main.js"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/src/main.js"]
