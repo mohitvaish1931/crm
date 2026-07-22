@@ -17,7 +17,6 @@ export class OrderRepository {
     let query = this.supabase
       .from('sales_orders')
       .select('*, customer:customers(name, code)', { count: 'exact' })
-      .is('deleted_at', null)
       .order('created_at', { ascending: false })
 
     if (search) {
@@ -46,7 +45,6 @@ export class OrderRepository {
       .from('sales_orders')
       .select('*, customer:customers(name, code)')
       .eq('id', id)
-      .is('deleted_at', null)
       .single()
 
     if (error) {
